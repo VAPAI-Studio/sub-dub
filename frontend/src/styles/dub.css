@@ -1,0 +1,125 @@
+.dub-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 3px solid black;
+}
+
+.dub-section h2 {
+  margin: 0 0 1.5rem;
+  font-family: var(--display);
+  font-weight: 700;
+  color: black;
+}
+
+.voice-mapping {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.voice-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.voice-speaker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: black;
+  min-width: 120px;
+}
+
+.voice-select {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 2px solid black;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+  background: white;
+  color: black;
+  transition: all 0.2s;
+}
+
+.voice-select:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 1);
+}
+
+.dub-btn {
+  display: block;
+  width: 100%;
+  padding: 1.25rem 2rem;
+  background: black;
+  color: white;
+  border: 3px solid black;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: var(--sans);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 2rem;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 1);
+}
+
+.dub-btn:hover:not(:disabled) {
+  background: white;
+  color: black;
+  transform: translateX(2px) translateY(2px);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 1);
+}
+
+.dub-btn:disabled {
+  background: #e5e5e5;
+  color: #999;
+  border-color: #ccc;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.dub-result {
+  margin-top: 1.5rem;
+  padding: 2rem;
+  background: white;
+  border: 3px solid black;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 1);
+}
+
+.dub-result h3 {
+  margin: 0 0 1.5rem;
+  font-family: var(--display);
+  font-weight: 700;
+  color: black;
+}
+
+.dub-download {
+  display: inline-block;
+  margin-top: 1rem;
+  text-decoration: none;
+  padding: 0.75rem 1.5rem;
+  background: black;
+  color: white;
+  border: 3px solid black;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: var(--sans);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 1);
+}
+
+.dub-download:hover {
+  background: white;
+  color: black;
+  transform: translateX(2px) translateY(2px);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 1);
+}
