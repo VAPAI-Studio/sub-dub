@@ -24,14 +24,6 @@ export default function OptionsPanel({ options, onChange }) {
         </select>
       </div>
 
-      <div className="option">
-        <label>Tarea</label>
-        <select value={options.task} onChange={(e) => update('task', e.target.value)}>
-          <option value="transcribe">Transcribir</option>
-          <option value="translate">Traducir a inglés</option>
-        </select>
-      </div>
-
       <div className="option option-checkbox">
         <label>
           <input
