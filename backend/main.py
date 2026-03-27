@@ -13,7 +13,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://subdub-api.vapai.studio",
-        "https://*.vercel.app",
+        "https://sub-dub-psi.vercel.app",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
