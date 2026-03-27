@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Juan/Desktop/WebProyects/SOUTS/sub-dub/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
