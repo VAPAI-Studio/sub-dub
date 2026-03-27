@@ -34,6 +34,28 @@ export async function deleteProject(projectId) {
   return res.json()
 }
 
+export async function uploadProjectAudio(projectId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`${API_URL}/projects/${projectId}/upload-audio`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Error uploading audio')
+  }
+  return res.json()
+}
+
+export function getProjectAudioUrl(projectId) {
+  return `${API_URL}/projects/${projectId}/audio`
+}
+
+export function getProjectDubUrl(projectId, language) {
+  return `${API_URL}/projects/${projectId}/dub-audio?lang=${language}`
+}
+
 // ===== Transcription API =====
 export async function transcribe(file, options, projectId = null) {
   const formData = new FormData()
@@ -85,21 +107,31 @@ export async function getVoices() {
   return data.voices || []
 }
 
-export async function generateDub(segments, voiceMap, defaultVoiceId, targetLang, projectId = null) {
+export async function getLibraryVoices(language) {
+  const res = await fetch(`${API_URL}/voices/library?lang=${language}`)
+  if (!res.ok) return []
+  const data = await res.json()
+  return data.voices || []
+}
+
+export async function generateDub(segments, voiceMap, defaultVoiceId, targetLang, projectId = null, sourceLang = null, originalSegments = null, timingMode = 'strict') {
   const res = await fetch(`${API_URL}/dub`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       project_id: projectId,
-      segments: segments.map((s) => ({
+      segments: segments.map((s, i) => ({
         start: s.start,
         end: s.end,
         text: s.text,
         speaker: s.speaker || 'default',
+        original_text: originalSegments?.[i]?.text || null,
       })),
       voice_map: voiceMap,
       default_voice_id: defaultVoiceId,
       target_language: targetLang,
+      source_language: sourceLang,
+      timing_mode: timingMode,
     }),
   })
   if (!res.ok) {

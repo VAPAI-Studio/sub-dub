@@ -10,7 +10,11 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://subdub-api.vapai.studio",
+        "https://*.vercel.app",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -26,4 +30,4 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)

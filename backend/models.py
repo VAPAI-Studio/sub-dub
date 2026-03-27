@@ -26,8 +26,8 @@ class ProjectDetail(ProjectResponse):
     """Project with all related data"""
     audio_file: Optional[dict] = None
     transcription: Optional[dict] = None
-    translation: Optional[dict] = None
-    dub: Optional[dict] = None
+    translations: list[dict] = []
+    dubs: list[dict] = []
 
 
 # ===== Translation Models =====
@@ -49,6 +49,7 @@ class DubSegment(BaseModel):
     end: float
     text: str
     speaker: Optional[str] = None
+    original_text: Optional[str] = None
 
 
 class DubRequest(BaseModel):
@@ -56,3 +57,5 @@ class DubRequest(BaseModel):
     voice_map: dict[str, str]
     default_voice_id: Optional[str] = None
     target_language: Optional[str] = None
+    source_language: Optional[str] = None
+    timing_mode: Optional[str] = "strict"  # "strict", "natural", "free"

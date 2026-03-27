@@ -1,12 +1,13 @@
 import os
 import uuid
+import tempfile
 from typing import Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
-from config import UPLOAD_DIR, ALLOWED_EXTENSIONS, VALID_MODELS
+from config import ALLOWED_EXTENSIONS, VALID_MODELS
 from services.asr import transcribe_audio, align_audio, diarize_audio, format_segments
-from services.supabase_client import get_supabase_client
+from services.supabase_client import get_supabase_client, upload_file
 
 router = APIRouter()
 
@@ -33,11 +34,13 @@ async def transcribe(
     if model_size not in VALID_MODELS:
         raise HTTPException(400, f"Modelo no válido: {model_size}")
 
-    file_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}{ext}")
+    # Save to temp file for WhisperX (needs local file path)
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+    file_path = temp_file.name
     try:
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
+        content = await file.read()
+        temp_file.write(content)
+        temp_file.close()
 
         audio, result = transcribe_audio(file_path, model_size, language, task)
         detected_language = result.get("language", "unknown")
@@ -53,20 +56,33 @@ async def transcribe(
 
         segments = format_segments(result, include_words=(align or diarize))
 
-        # Save to database if project_id provided
+        # Save to database and storage if project_id provided
         if project_id:
             supabase = get_supabase_client()
 
-            # Save audio file info
-            audio_data = {
-                "project_id": project_id,
-                "file_url": file_path,  # TODO: Upload to Supabase Storage
-                "original_filename": file.filename,
-                "duration": segments[-1]["end"] if segments else None,
-            }
-            supabase.table("audio_files").insert(audio_data).execute()
+            # Upload audio to Supabase Storage
+            storage_path = f"{project_id}/{uuid.uuid4().hex[:8]}{ext}"
+            upload_file("audio-inputs", storage_path, content)
 
-            # Save transcription
+            # Check if audio_files already exists for this project (from upload-audio endpoint)
+            existing = supabase.table("audio_files").select("id").eq("project_id", project_id).execute()
+            if not existing.data:
+                # Save audio file info only if not already uploaded
+                audio_data = {
+                    "project_id": project_id,
+                    "file_url": storage_path,
+                    "original_filename": file.filename,
+                    "duration": segments[-1]["end"] if segments else None,
+                }
+                supabase.table("audio_files").insert(audio_data).execute()
+            else:
+                # Update duration on existing record
+                supabase.table("audio_files").update({
+                    "duration": segments[-1]["end"] if segments else None,
+                }).eq("project_id", project_id).execute()
+
+            # Save transcription (replace existing)
+            existing_transcription = supabase.table("transcriptions").select("id").eq("project_id", project_id).execute()
             transcription_data = {
                 "project_id": project_id,
                 "segments_json": segments,
@@ -80,13 +96,17 @@ async def transcribe(
                     "max_speakers": max_speakers,
                 },
             }
-            supabase.table("transcriptions").insert(transcription_data).execute()
+            if existing_transcription.data:
+                supabase.table("transcriptions").update(transcription_data) \
+                    .eq("id", existing_transcription.data[0]["id"]).execute()
+            else:
+                supabase.table("transcriptions").insert(transcription_data).execute()
 
             # Update project status
             supabase.table("projects").update({"status": "transcribed"}).eq("id", project_id).execute()
 
         return {"segments": segments, "language": detected_language}
     finally:
-        if os.path.exists(file_path) and not project_id:
-            # Only delete if not saving to DB (later we'll upload to Storage)
+        # Always clean up temp file
+        if os.path.exists(file_path):
             os.remove(file_path)

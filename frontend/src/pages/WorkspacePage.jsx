@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { transcribe as apiTranscribe } from "../api";
+import { transcribe as apiTranscribe, uploadProjectAudio, getProjectAudioUrl, getProjectDubUrl } from "../api";
 import { getVoices } from "../api";
 import { useProject } from "../hooks/useProject";
 import UploadPanel from "../components/UploadPanel";
@@ -8,6 +8,7 @@ import OptionsPanel from "../components/OptionsPanel";
 import TranscriptionResult from "../components/TranscriptionResult";
 import TranslatePanel from "../components/TranslatePanel";
 import DubPanel from "../components/DubPanel";
+import LanguageTabs from "../components/LanguageTabs";
 import "../App.css";
 
 function WorkspacePage() {
@@ -17,11 +18,16 @@ function WorkspacePage() {
 
   const [file, setFile] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
+  const [audioFilename, setAudioFilename] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [translated, setTranslated] = useState(null);
+  const [translations, setTranslations] = useState({});
+  const [dubs, setDubs] = useState({});
+  const [activeLanguage, setActiveLanguage] = useState(null);
+  const [showAddLanguage, setShowAddLanguage] = useState(false);
   const [voices, setVoices] = useState([]);
+  const [uploading, setUploading] = useState(false);
   const audioRef = useRef(null);
 
   const [options, setOptions] = useState({
@@ -43,29 +49,56 @@ function WorkspacePage() {
   // Load project data when available
   useEffect(() => {
     if (project) {
+      if (project.audio_file) {
+        setAudioUrl(getProjectAudioUrl(project.id));
+        setAudioFilename(project.audio_file.original_filename);
+      }
       if (project.transcription) {
         setResult({
           segments: project.transcription.segments_json,
           language: project.transcription.language,
         });
       }
-      if (project.translation) {
-        setTranslated({
-          segments: project.translation.segments_json,
-          language: project.translation.target_language,
-        });
+      if (project.translations?.length) {
+        const map = {};
+        for (const t of project.translations) {
+          map[t.target_language] = { segments: t.segments_json, language: t.target_language };
+        }
+        setTranslations(map);
+        setActiveLanguage(project.translations[0].target_language);
+      }
+      if (project.dubs?.length) {
+        const map = {};
+        for (const d of project.dubs) {
+          map[d.target_language] = getProjectDubUrl(project.id, d.target_language);
+        }
+        setDubs(map);
       }
     }
   }, [project]);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const selected = e.target.files[0] || null;
     setFile(selected);
     setResult(null);
     setError(null);
-    setTranslated(null);
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setTranslations({});
+    setDubs({});
+    setActiveLanguage(null);
+    if (audioUrl && audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
     setAudioUrl(selected ? URL.createObjectURL(selected) : null);
+    setAudioFilename(selected ? selected.name : null);
+
+    if (selected && projectId) {
+      setUploading(true);
+      try {
+        await uploadProjectAudio(projectId, selected);
+      } catch (err) {
+        console.error('Error uploading audio:', err);
+      } finally {
+        setUploading(false);
+      }
+    }
   };
 
   const handleSegmentClick = (startTime) => {
@@ -89,7 +122,9 @@ function WorkspacePage() {
     setLoading(true);
     setError(null);
     setResult(null);
-    setTranslated(null);
+    setTranslations({});
+    setDubs({});
+    setActiveLanguage(null);
 
     try {
       const data = await apiTranscribe(file, options, projectId);
@@ -99,6 +134,16 @@ function WorkspacePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTranslated = (data) => {
+    setTranslations(prev => ({ ...prev, [data.language]: data }));
+    setActiveLanguage(data.language);
+    setShowAddLanguage(false);
+  };
+
+  const handleDubCreated = (language, blobUrl) => {
+    setDubs(prev => ({ ...prev, [language]: blobUrl }));
   };
 
   if (projectLoading) {
@@ -111,6 +156,9 @@ function WorkspacePage() {
       </div>
     );
   }
+
+  const languageKeys = Object.keys(translations);
+  const activeTranslation = activeLanguage ? translations[activeLanguage] : null;
 
   return (
     <div className="min-h-screen bg-white">
@@ -145,13 +193,15 @@ function WorkspacePage() {
             audioUrl={audioUrl}
             audioRef={audioRef}
             onFileChange={handleFileChange}
+            audioFilename={audioFilename}
+            uploading={uploading}
           />
 
           <OptionsPanel options={options} onChange={setOptions} />
 
           <button
             onClick={handleTranscribe}
-            disabled={!file || loading}
+            disabled={(!file && !audioUrl) || loading}
             className="transcribe-btn"
           >
             {loading ? "Procesando..." : "Transcribir"}
@@ -175,21 +225,39 @@ function WorkspacePage() {
           )}
 
           {result && (
-            <TranslatePanel
-              result={result}
-              translated={translated}
-              onTranslated={setTranslated}
-              onSegmentClick={handleSegmentClick}
-              projectId={projectId}
-            />
-          )}
+            <>
+              {languageKeys.length > 0 && (
+                <LanguageTabs
+                  languages={languageKeys}
+                  activeLanguage={activeLanguage}
+                  onSelectLanguage={(lang) => { setActiveLanguage(lang); setShowAddLanguage(false); }}
+                  onAddLanguage={() => setShowAddLanguage(true)}
+                  dubLanguages={Object.keys(dubs)}
+                />
+              )}
 
-          {translated && voices.length > 0 && (
-            <DubPanel
-              translated={translated}
-              voices={voices}
-              projectId={projectId}
-            />
+              <TranslatePanel
+                result={result}
+                activeTranslation={activeTranslation}
+                onTranslated={handleTranslated}
+                onSegmentClick={handleSegmentClick}
+                projectId={projectId}
+                existingLanguages={languageKeys}
+                showAddForm={showAddLanguage || languageKeys.length === 0}
+              />
+
+              {activeLanguage && activeTranslation && voices.length > 0 && (
+                <DubPanel
+                  key={activeLanguage}
+                  translated={activeTranslation}
+                  voices={voices}
+                  projectId={projectId}
+                  result={result}
+                  existingDubUrl={dubs[activeLanguage] || null}
+                  onDubCreated={handleDubCreated}
+                />
+              )}
+            </>
           )}
         </div>
       </main>
