@@ -1,32 +1,34 @@
 # SUB-DUB - Subtitles & Dubbing Tool
 
-Herramienta web para generar subtítulos y doblaje desde archivos de audio/video. El flujo de trabajo es: **subir audio → transcribir → traducir → doblar con voces sintéticas**.
+Herramienta web para generar subtítulos y doblaje desde archivos de audio/video. El flujo de trabajo es: **subir audio → transcribir → traducir (multi-idioma) → doblar con voces sintéticas**.
 
-## 🚀 Características
+## Características
 
 - **Transcripción (ASR)**: WhisperX para transcribir audio a texto con marcas de tiempo
-- **Traducción**: Claude AI para traducir subtítulos manteniendo la estructura temporal
-- **Doblaje (TTS)**: ElevenLabs para generar voces sintéticas con mapeo de hablantes
-- **Persistencia**: Supabase (PostgreSQL) para guardar proyectos y datos relacionados
+- **Traducción multi-idioma**: Claude AI para traducir subtítulos a múltiples idiomas simultáneamente
+- **Doblaje (TTS)**: ElevenLabs para generar voces sintéticas con mapeo de hablantes y 3 modos de timing
+- **Librería de voces**: Acceso a voces propias + librería pública de ElevenLabs filtradas por idioma
+- **Estimación por fonemas**: Cálculo inteligente de velocidad de habla usando `phonemizer` para mejor calidad
+- **Persistencia**: Supabase (PostgreSQL + Storage) para guardar proyectos, archivos y datos
 
-## 📋 Requisitos Previos
+## Requisitos Previos
 
 - **Python 3.10+** (para backend)
 - **Node.js 18+** y npm (para frontend)
 - **FFmpeg** instalado y en PATH (requerido por pydub)
-- **Supabase CLI** (opcional, para desarrollo local)
+- **espeak-ng** instalado (requerido por phonemizer para estimación de fonemas)
+- **Docker Desktop** (para Supabase local)
+- **Supabase CLI** (para desarrollo local)
 - GPU NVIDIA con CUDA (opcional, mejora rendimiento de transcripción)
 
-## 🔑 API Keys Necesarias
-
-Necesitarás obtener las siguientes claves:
+## API Keys Necesarias
 
 1. **Hugging Face Token**: https://huggingface.co/settings/tokens (para diarización de hablantes)
 2. **Anthropic API Key**: https://console.anthropic.com/ (para traducción con Claude)
 3. **ElevenLabs API Key**: https://elevenlabs.io/app/settings/api-keys (para TTS)
 4. **Supabase URL + Key**: https://supabase.com/dashboard/project/_/settings/api (o local con CLI)
 
-## 📦 Instalación
+## Instalación
 
 ### 1. Clonar el Repositorio
 
@@ -39,20 +41,7 @@ cd sub-dub
 
 ```bash
 cd backend
-
-# Crear entorno virtual
-python -m venv venv
-
-# Activar entorno virtual
-# Windows:
-venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
-
-# Instalar dependencias
 pip install -r requirements.txt
-
-# Copiar archivo de ejemplo y configurar variables
 cp .env.example .env
 # Editar .env con tus API keys
 ```
@@ -63,29 +52,34 @@ cp .env.example .env
 HF_TOKEN=tu_token_de_huggingface
 ANTHROPIC_API_KEY=tu_api_key_de_anthropic
 ELEVENLABS_API_KEY=tu_api_key_de_elevenlabs
+
+# --- Local ---
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_KEY=tu_supabase_key
+# --- Cloud ---
+# SUPABASE_URL=https://tu-proyecto.supabase.co
+# SUPABASE_KEY=tu_supabase_anon_key
 ```
 
 ### 3. Configurar Frontend
 
 ```bash
 cd ../frontend
-
-# Instalar dependencias
 npm install
-
-# Copiar archivo de ejemplo y configurar variables
 cp .env.example .env
-# Editar .env con la URL de tu backend
 ```
 
 **Configurar `.env` del frontend:**
 
 ```env
-VITE_API_URL=http://localhost:8001
+VITE_API_URL=http://localhost:8002
+
+# --- Local ---
 VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
+# --- Cloud ---
+# VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+# VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
 ```
 
 ### 4. Configurar Base de Datos (Supabase)
@@ -93,35 +87,49 @@ VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
 **Opción A: Supabase Local (Recomendado para desarrollo)**
 
 ```bash
-# Instalar Supabase CLI
-npm install -g supabase
+# Instalar Supabase CLI (Windows con scoop)
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
 
 # Iniciar Supabase local (desde la raíz del proyecto)
-cd ..
 supabase start
 
 # Copiar las credenciales que aparecen en la consola a tus archivos .env
-# API URL: http://127.0.0.1:54321
-# anon key: eyJ...
 
 # Aplicar migraciones
-supabase db push
+supabase db reset
 ```
 
 **Opción B: Supabase Cloud**
 
 1. Crear proyecto en https://supabase.com/dashboard
 2. Ir a Settings → API y copiar URL + anon key
-3. Ir a SQL Editor y ejecutar el contenido de `supabase/migrations/20260326000001_create_projects_schema.sql`
+3. Linkear: `supabase link --project-ref TU_PROJECT_ID`
+4. Aplicar migraciones: `supabase db push`
 
-### 5. Instalar FFmpeg
+### 5. Instalar espeak-ng (para estimación de fonemas)
 
 **Windows:**
 ```bash
-# Con chocolatey
-choco install ffmpeg
+choco install espeak-ng
+# O descargar desde: https://github.com/espeak-ng/espeak-ng/releases
+```
 
-# O descargar desde: https://ffmpeg.org/download.html
+**Mac:**
+```bash
+brew install espeak-ng
+```
+
+**Linux:**
+```bash
+sudo apt install espeak-ng
+```
+
+### 6. Instalar FFmpeg
+
+**Windows:**
+```bash
+choco install ffmpeg
 ```
 
 **Mac:**
@@ -131,23 +139,19 @@ brew install ffmpeg
 
 **Linux:**
 ```bash
-sudo apt update
 sudo apt install ffmpeg
 ```
 
-## 🏃 Ejecutar el Proyecto
+## Ejecutar el Proyecto
 
 ### Backend
 
 ```bash
 cd backend
-# Activar entorno virtual si no está activo
-# venv\Scripts\activate (Windows) o source venv/bin/activate (Mac/Linux)
-
-uvicorn main:app --reload --host 0.0.0.0 --port 8001
+uvicorn main:app --reload --host 0.0.0.0 --port 8002
 ```
 
-El backend estará disponible en: http://localhost:8001
+El backend estará disponible en: http://localhost:8002
 
 ### Frontend
 
@@ -158,107 +162,148 @@ npm run dev
 
 El frontend estará disponible en: http://localhost:5173
 
-## 📁 Estructura del Proyecto
+## Deploy (Producción)
+
+### Arquitectura
+
+```
+[Vercel: frontend] → [Cloudflare Tunnel] → [PC local: backend + GPU]
+       ↓                                           ↓
+[Supabase Cloud: DB + Storage] ←──────────────────┘
+```
+
+- **Frontend**: Vercel (deploy automático desde GitHub, root: `frontend`)
+- **Backend**: PC local con GPU, expuesto via Cloudflare Tunnel
+- **Base de datos + Storage**: Supabase Cloud
+
+### URLs de producción
+
+- Frontend: `https://sub-dub-psi.vercel.app`
+- Backend API: `https://subdub-api.vapai.studio`
+
+## Estructura del Proyecto
 
 ```
 sub-dub/
-├── backend/              # FastAPI REST API
-│   ├── routes/           # Endpoints (transcribe, translate, dub, projects)
-│   ├── services/         # Lógica de negocio (ASR, translation, TTS, Supabase)
-│   ├── models.py         # Esquemas Pydantic
-│   ├── config.py         # Configuración (CUDA/CPU, formatos permitidos)
-│   ├── main.py           # App FastAPI
+├── backend/
+│   ├── routes/
+│   │   ├── transcribe.py    # POST /transcribe
+│   │   ├── translate.py     # POST /translate (upsert por idioma)
+│   │   ├── dub.py           # POST /dub, GET /voices, GET /voices/library
+│   │   └── projects.py      # CRUD + upload/serve audio via Storage
+│   ├── services/
+│   │   ├── asr.py           # WhisperX transcription
+│   │   ├── translation.py   # Claude translation
+│   │   ├── tts.py           # ElevenLabs TTS (3 timing modes)
+│   │   ├── duration_estimator.py  # Phoneme-based speed estimation
+│   │   └── supabase_client.py     # DB + Storage helpers
+│   ├── models.py
+│   ├── config.py
+│   ├── main.py
 │   └── requirements.txt
-├── frontend/             # React 19 SPA (Vite)
+├── frontend/
 │   ├── src/
-│   │   ├── components/   # Componentes reutilizables
-│   │   ├── pages/        # Páginas principales
-│   │   ├── services/     # API clients
-│   │   └── lib/          # Utilidades (supabaseClient)
+│   │   ├── components/
+│   │   │   ├── UploadPanel.jsx
+│   │   │   ├── OptionsPanel.jsx
+│   │   │   ├── TranscriptionResult.jsx
+│   │   │   ├── SegmentList.jsx
+│   │   │   ├── TranslatePanel.jsx
+│   │   │   ├── DubPanel.jsx
+│   │   │   └── LanguageTabs.jsx
+│   │   ├── pages/
+│   │   │   ├── ProjectsListPage.jsx
+│   │   │   └── WorkspacePage.jsx
+│   │   ├── hooks/
+│   │   ├── api.js
+│   │   ├── constants.js
+│   │   └── utils.js
 │   └── package.json
 ├── supabase/
-│   ├── config.toml       # Configuración Supabase
-│   └── migrations/       # SQL migrations
-└── audios/               # Archivos de audio de ejemplo (opcional)
+│   ├── config.toml
+│   └── migrations/
+│       ├── 20260326000001_create_projects_schema.sql
+│       ├── 20260327000001_add_multi_language_support.sql
+│       └── 20260327000002_create_storage_buckets.sql
+└── audios/
 ```
 
-## 🔧 API Endpoints
+## API Endpoints
 
-| Método | Endpoint           | Descripción                                    |
-|--------|--------------------|------------------------------------------------|
-| GET    | `/projects/`       | Listar todos los proyectos                     |
-| POST   | `/projects/`       | Crear nuevo proyecto                           |
-| GET    | `/projects/{id}`   | Obtener proyecto con datos relacionados        |
-| PUT    | `/projects/{id}`   | Actualizar proyecto                            |
-| DELETE | `/projects/{id}`   | Eliminar proyecto (cascada)                    |
-| POST   | `/transcribe`      | Subir audio y transcribir                      |
-| POST   | `/translate`       | Traducir segmentos a idioma destino            |
-| GET    | `/voices`          | Listar voces disponibles de ElevenLabs         |
-| POST   | `/dub`             | Generar audio doblado desde segmentos + voces  |
+| Método | Endpoint                          | Descripción                                    |
+|--------|-----------------------------------|------------------------------------------------|
+| GET    | `/projects/`                      | Listar todos los proyectos                     |
+| POST   | `/projects/`                      | Crear nuevo proyecto                           |
+| GET    | `/projects/{id}`                  | Obtener proyecto con datos relacionados        |
+| PUT    | `/projects/{id}`                  | Actualizar proyecto                            |
+| DELETE | `/projects/{id}`                  | Eliminar proyecto (cascada)                    |
+| POST   | `/projects/{id}/upload-audio`     | Subir audio a Supabase Storage                 |
+| GET    | `/projects/{id}/audio`            | Servir audio (redirect a Storage URL)          |
+| GET    | `/projects/{id}/dub-audio?lang=xx`| Servir audio de dub por idioma                 |
+| POST   | `/transcribe`                     | Subir audio y transcribir con WhisperX         |
+| POST   | `/translate`                      | Traducir segmentos (upsert por idioma)         |
+| GET    | `/voices`                         | Listar voces propias de ElevenLabs             |
+| GET    | `/voices/library?lang=xx`         | Buscar voces en librería pública por idioma    |
+| POST   | `/dub`                            | Generar audio doblado (3 modos de timing)      |
 
-## 🎯 Flujo de Uso
+## Flujo de Uso
 
-1. **Crear proyecto** → POST `/projects/` con nombre
-2. **Subir audio** → POST `/transcribe` con archivo de audio
-3. **Traducir** → POST `/translate` con segmentos transcritos
-4. **Doblar** → POST `/dub` con segmentos traducidos + mapeo de voces
-5. **Descargar resultado** → Archivo MP3 generado
+1. **Crear proyecto** → asignar nombre
+2. **Subir audio** → se guarda en Supabase Storage
+3. **Transcribir** → WhisperX genera segmentos con timestamps
+4. **Traducir** → Claude traduce a uno o más idiomas (tabs)
+5. **Doblar** → ElevenLabs genera audio por idioma con voces asignadas
+6. **Descargar** → Subtítulos (SRT/TXT/JSON) + audio MP3
 
-## 🌍 Idiomas Soportados
+## Modos de Doblaje
+
+| Modo | Descripción | Ideal para |
+|------|-------------|------------|
+| **Estricto** | Sincronizado con timestamps originales (acelera/recorta si es necesario) | Video con lip-sync |
+| **Natural** | Respeta posición de inicio pero no acelera ni recorta | Calidad de voz prioritaria |
+| **Libre** | Concatenación secuencial sin timeline | Audiolibros, podcasts |
+
+## Idiomas Soportados
 
 16 idiomas para transcripción/traducción:
 - Español (es), Inglés (en), Francés (fr), Alemán (de), Italiano (it), Portugués (pt)
 - Japonés (ja), Chino (zh), Coreano (ko), Ruso (ru), Árabe (ar)
 - Hindi (hi), Turco (tr), Polaco (pl), Holandés (nl), Sueco (sv)
 
-## 🎵 Formatos de Audio Soportados
+## Formatos de Audio Soportados
 
 `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.webm`, `.mp4`, `.wma`
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Error: "ModuleNotFoundError: No module named 'whisperx'"
 ```bash
-# WhisperX requiere instalación manual:
 pip install git+https://github.com/m-bain/whisperx.git
 ```
 
 ### Error: "RuntimeError: CUDA not available"
-No es un error crítico. El backend caerá automáticamente a CPU con cuantización int8. Para mejor rendimiento, instala CUDA toolkit.
+No es un error crítico. El backend cae automáticamente a CPU con cuantización int8.
 
 ### Error: "FileNotFoundError: ffmpeg"
-Asegúrate de tener FFmpeg instalado y en PATH. Verifica con:
 ```bash
-ffmpeg -version
+ffmpeg -version  # Verificar instalación
 ```
 
+### Error: "espeak not installed on your system"
+Instalar espeak-ng y asegurarse de que esté en PATH. En Windows puede ser necesario reiniciar la terminal.
+
 ### Error: "Supabase connection refused"
-- Si usas Supabase local, asegúrate de ejecutar `supabase start`
-- Verifica que las URLs y keys en `.env` sean correctas
-- Revisa que las migraciones se hayan aplicado: `supabase db push`
+- Si usas Supabase local: ejecutar `supabase start`
+- Verificar URLs y keys en `.env`
+- Verificar migraciones: `supabase db reset` (local) o `supabase db push` (cloud)
 
-## 📝 Notas
+### Error: "Sin créditos en ElevenLabs"
+Tu cuenta de ElevenLabs se quedó sin créditos. Recarga en https://elevenlabs.io/subscription.
 
-- Los archivos subidos se guardan temporalmente en `backend/uploads/`
-- La primera transcripción puede tardar más (descarga modelo WhisperX ~1GB)
-- GPU recomendada para transcripción rápida, pero funciona en CPU
-- Supabase local usa Docker, asegúrate de tenerlo instalado
-
-## 🤝 Contribuir
-
-1. Fork el proyecto
-2. Crea tu rama (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit tus cambios (`git commit -m 'Agregar nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Abre un Pull Request
-
-## 📄 Licencia
-
-MIT License - ver archivo LICENSE para más detalles.
-
-## 🙏 Créditos
+## Créditos
 
 - **WhisperX**: https://github.com/m-bain/whisperx
 - **Anthropic Claude**: https://www.anthropic.com
 - **ElevenLabs**: https://elevenlabs.io
 - **Supabase**: https://supabase.com
+- **phonemizer**: https://github.com/bootphon/phonemizer
